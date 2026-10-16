@@ -5,7 +5,7 @@
 	"keywords": ["pi-package", "pi", "opencode", "opencode-zen"],
 	"license": "MIT",
 	"type": "module",
-	"files": ["extensions", "README.md", "README.zh-CN.md", "LICENSE"],
+	"files": ["extensions", "README.md", "README.zh-CN.md", "AGENT-SETUP.md", "LICENSE"],
 	"scripts": {
 		"test": "node --test test/*.test.mjs"
 	},

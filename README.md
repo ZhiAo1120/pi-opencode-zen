@@ -11,9 +11,9 @@ proxy, no real API key.
 > Pi's requests look like the official OpenCode client's. That is a terms-of-service grey area,
 > and OpenCode says traffic is monitored for abuse.
 >
-> Realistically: expect `429` rate limiting (it already happens on most models) and, in the worst
-> case, an IP block. This project is **not affiliated with OpenCode or Pi**. Use it at your own
-> risk, and prefer the paid OpenCode Go plan (Pi is a validated client there) if you need
+> Realistically: expect `429` — most free models are only served in limited quantity — and, in
+> the worst case, an IP block. This project is **not affiliated with OpenCode or Pi**. Use it at
+> your own risk, and prefer the paid OpenCode Go plan (Pi is a validated client there) if you need
 > something stable.
 
 ---
@@ -41,8 +41,12 @@ The reason it is needed at all: **summarization / compaction** builds a request 
 ## Requirements
 
 - Pi with extension + custom-provider support (tested on Pi 1.3.0, including the Percho desktop app).
-- A network exit in a region the free tier serves. From a blocked region every model answers
-  `403 RegionError` (see [Troubleshooting](#troubleshooting)).
+- **A proxy whose exit sits in a region the free tier serves.** This is not optional from
+  mainland China: on a CN exit IP *every* model answers
+  `403 RegionError: This model is not available in your country`, however correct your
+  configuration is. A US exit was measured working. The region check runs **before** the
+  request-shape check, so a region error says nothing about your setup — bring the proxy up
+  first, then test. See [Troubleshooting](#troubleshooting).
 - No OpenCode account or API key. The free tier authenticates with the literal string `public`.
 
 ## Install
@@ -67,6 +71,9 @@ pi -e ./extensions/opencode-zen.ts -p --model opencode-zen/cat-jam-free "hello"
 
 Extensions load at startup: **restart Pi** (or the Percho app — it hosts Pi in-process) after
 installing or editing the file.
+
+Want your coding agent to do all of this — extension, `models.json` and the CC Switch row? Paste
+[`AGENT-SETUP.md`](AGENT-SETUP.md) into it. (That prompt is written in Chinese.)
 
 ## Configure
 
@@ -97,6 +104,77 @@ Two rules that matter:
 - No headers needed. The extension sends `User-Agent` and the session headers itself. Never send
   `x-opencode-request` (a legacy header that causes an immediate 403).
 
+## CC Switch
+
+[CC Switch](https://github.com/farion1231/cc-switch) keeps a second copy of your Pi providers and
+writes them into `models.json` when you switch. Both copies must agree, and they are keyed
+differently, so it is worth knowing exactly where each one lives.
+
+| | |
+|---|---|
+| Database | `~/.cc-switch/cc-switch.db` (SQLite) |
+| Row | table `providers`, `id = 'opencode-zen'`, `app_type = 'pi'` |
+| `settings_config` | the **provider object only** — `name`, `baseUrl`, `api`, `apiKey`, `headers`, `models` — not the whole `models.json` |
+| Other columns | `name`, `category = 'custom'`, `icon = 'pi'`, `meta = '{}'`, `is_current = 0`, `in_failover_queue = 0`, `cost_multiplier = '1.0'` |
+
+**Quit CC Switch before writing to the database.** The app holds its provider list in memory and
+rewrites the file, so an edit made while it runs can be silently lost.
+
+```bash
+# back up first
+cp ~/.cc-switch/cc-switch.db /tmp/cc-switch.db.bak-$(date +%s)
+
+python3 - <<'PY'
+import json, os, sqlite3, time
+
+# The same provider object as the models.json snippet above.
+provider = {
+    "name": "OpenCode Zen (free)",
+    "baseUrl": "https://opencode.ai/zen/v1",
+    "api": "opencode-zen-api",
+    "apiKey": "public",
+    "models": [
+        {"id": "cat-jam-free", "name": "cat-jam-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 131072},
+        {"id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": True, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072},
+        {"id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144},
+    ],
+}
+
+db = os.path.expanduser("~/.cc-switch/cc-switch.db")
+con = sqlite3.connect(db)
+con.execute(
+    """INSERT INTO providers
+       (id, app_type, name, settings_config, category, created_at, icon, meta,
+        is_current, in_failover_queue, cost_multiplier)
+       VALUES ('opencode-zen', 'pi', 'OpenCode Zen (free)', ?, 'custom', ?, 'pi', '{}', 0, 0, '1.0')
+       ON CONFLICT(id, app_type) DO UPDATE SET
+         name = excluded.name,
+         settings_config = excluded.settings_config,
+         category = excluded.category""",
+    (json.dumps(provider, ensure_ascii=False), int(time.time() * 1000)),
+)
+con.commit()
+con.close()
+print("cc-switch row written")
+PY
+```
+
+Check that the two copies match:
+
+```bash
+python3 - <<'PY'
+import json, os, sqlite3
+db = os.path.expanduser("~/.cc-switch/cc-switch.db")
+row = sqlite3.connect(f"file:{db}?mode=ro", uri=True).execute(
+    "select settings_config from providers where id='opencode-zen' and app_type='pi'").fetchone()
+models = json.load(open(os.path.expanduser("~/.pi/agent/models.json")))
+print("in sync:", json.loads(row[0]) == models["providers"]["opencode-zen"])
+PY
+```
+
+CC Switch is optional. Pi reads `models.json` directly, so the provider block alone is enough —
+the row only matters if you switch providers through the app.
+
 ## Verify
 
 ```bash
@@ -122,11 +200,13 @@ point, not a promise.
 | Status | Models |
 |---|---|
 | Works | `cat-jam-free` (262K/131K), `longcat-2.5-preview-free` (1M/131K), `nemotron-3.5-lightning-free` (262K/262K) |
-| `429 FreeUsageLimitError` | `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `space-bunny-free`, `mimo-v2.6-flash-free`, `big-pickle`, `ll-alpha-free`, `nemotron-3.5-super-vl-free` |
+| `429 FreeUsageLimitError` | `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `space-bunny-free`, `mimo-v2.6-flash-free`, `big-pickle`, `ll-alpha-free`, `nemotron-3.5-super-vl-free` — **served in limited quantity** |
 | Wrong protocol, unusable here | `muse-spark-1.2/1.3-contributor-free` (responses API), `jev-1.13-free` (systemone API) |
 
-The 429 group was checked against session reuse, IP blocking and region — none of them explained
-it; those models were simply rate limited at the account-free-tier level.
+The 429 group is a supply limit, not your usage: those models are only served in limited quantity
+on the free tier, so they are often unavailable no matter who asks. Ruled out by experiment:
+session reuse (a fresh session id changed nothing), IP blocking (other models answered 200 from the
+same IP), and region (the exit was in the US).
 
 ## How it works
 
@@ -163,7 +243,7 @@ through with only `stream` forced on.
 |---|---|
 | `403 FreeTierError` | Request shape is wrong: tools missing, wrong User-Agent, malformed session id, or `x-opencode-request` was sent. |
 | `403 RegionError` — *"This model is not available in your country"* | Your exit IP's region is not served. The region check runs **before** the shape check, so this error says nothing about the request shape. Every model fails the same way. Use an exit in a served region. |
-| `429 FreeUsageLimitError` | Shape is fine; that model is rate limited for you. Try another model from the table above. |
+| `429 FreeUsageLimitError` | Shape is fine; that model is out of free capacity — it is served in limited quantity. Try another model from the table above, or come back later. |
 | Still broken after an edit | The extension loads at startup. Restart Pi / Percho. |
 | `Summarization failed: 403` in long sessions | The extension is not loaded. Check for a stale `-ne` in your aliases. |
 | A tool-less run tries to call `bash`/`read` | Those are the injected placeholders, not real tools. Run with tools enabled. |
@@ -175,11 +255,18 @@ npm test          # unit tests: session-id shape, payload shaping, header wiring
 ```
 
 The tests stub `@earendil-works/pi-ai` and import the extension directly, so they run without a Pi
-installation. Verified end to end with a throwaway agent dir:
+installation. Verified against the live endpoint on 2026-10-16 (US exit IP), with the extension
+loaded from the repository path and a throwaway agent dir:
 
 ```bash
-PI_CODING_AGENT_DIR=/tmp/zen-e2e pi -ne -e ./extensions/opencode-zen.ts \
-  --list-models opencode-zen
+PI_CODING_AGENT_DIR=/tmp/zen-e2e pi -ne -e ./extensions/opencode-zen.ts --list-models opencode-zen
+# -> provider opencode-zen / model cat-jam-free listed
+
+pi -p --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply with exactly: ZEN-OK"
+# -> ZEN-OK
+
+pi -p --no-tools --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply with exactly: NOTOOLS-OK"
+# -> NOTOOLS-OK   (proves the injected shape passes the gate on a tool-less request)
 ```
 
 ## License
