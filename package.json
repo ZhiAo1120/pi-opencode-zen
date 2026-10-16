@@ -1,0 +1,15 @@
+{
+	"name": "pi-opencode-zen",
+	"version": "1.0.0",
+	"description": "Use OpenCode Zen free-tier models from Pi, without a proxy",
+	"keywords": ["pi-package", "pi", "opencode", "opencode-zen"],
+	"license": "MIT",
+	"type": "module",
+	"files": ["extensions", "README.md", "README.zh-CN.md", "LICENSE"],
+	"scripts": {
+		"test": "node --test test/*.test.mjs"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*"
+	}
+}
