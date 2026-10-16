@@ -1,64 +1,61 @@
-# Pi + CC Switch 用上 OpenCode 免费模型
+# 在 Pi 里用 OpenCode 的免费模型（顺带 CC Switch 配置）
 
-> **一句话**：给 Pi 装一个扩展，就能直接调用 OpenCode Zen 的免费模型 —— 不需要中间代理进程，
-> 不需要反代，也不需要真的 API key。
->
-> 仓库（MIT）：<https://github.com/ZhiAo1120/pi-opencode-zen>
+上周想把 OpenCode 的免费模型接进 Pi，本来以为改个 baseUrl 就完事，结果一路 403，折腾了两天
+才摸清门槛到底卡在哪。踩的坑记在这，配置也整理成了一个扩展。
 
----
+仓库：<https://github.com/ZhiAo1120/pi-opencode-zen>（MIT）
 
-## 先说清楚三件事
+先把几个前提说了，免得白折腾：
 
-1. **大陆出口 IP 用不了。** 必须挂代理，且出口要落在免费层服务的地区（实测美国可用）。
-   大陆 IP 下无论配置多正确，所有模型都返回 `403 RegionError`。
-2. **免费层是「限量提供」的。** 大多数模型会返回 `429 FreeUsageLimitError`，这是服务侧放量有限，
-   不是你的用量问题。目前稳定可用的是 3 个（见下表）。
-3. **这是条款擦边球。** 官方明确说免费层只给 OpenCode 客户端用，且会监控滥用流量。风险自负，
-   要稳定请用付费的 OpenCode Go 订阅。
+- 大陆 IP 用不了，得挂代理，出口要在服务地区（我用的是美国出口）。
+- 免费模型是限量提供的，大部分时候会返回 429，目前稳定能用的就 3 个。
+- 这事属于打条款擦边球（官方说免费层只给 OpenCode 客户端用），风险自负。
 
 ---
 
-## 为什么需要一个插件
+## 403 的原因不是 key，是请求形状
 
-OpenCode 的免费端点不在常规 API 上，而是 `https://opencode.ai/zen/v1/chat/completions`
-（`/inference/...` 是付费 Console 层）。它**不靠密钥校验，靠请求形状校验** —— 形状不对就是：
+免费端点不在常规 API 上，是 `https://opencode.ai/zen/v1/chat/completions`。
+注意不是 `/inference/...`，那个是付费 Console 层。
+
+它的放行规则跟密钥无关。免费层根本不需要真 key，认证头写 `Authorization: Bearer public` 就行。
+它卡的是请求长什么样，形状不对就给你：
 
 ```
 403 {"type":"error","error":{"type":"FreeTierError",
      "message":"OpenCode's free tier can only be used from within OpenCode."}}
 ```
 
-形状要求（全部同时满足）：
+具体要满足这些，缺一不可：
 
-| 条件 | 值 |
-|---|---|
-| 认证 | `Authorization: Bearer public`（免费层不需要真 key） |
-| body | `"stream": true` |
-| tools | 必须包含**恰好叫 `bash` 和 `read`** 的函数定义 |
-| User-Agent | 含 `opencode/<版本>`，如 `opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14` |
-| 会话头 | `x-opencode-session` **和** `x-opencode-session-id` 两个都要发，值相同 |
-| 会话格式 | `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`，且 12 位 hex 要匹配 `^[0-9a-f]{9}f[c-f][0-9a-f]$` |
-| 禁止 | `x-opencode-request` —— 发了直接 403 |
+- 认证头 `Authorization: Bearer public`
+- body 里必须 `"stream": true`
+- `tools` 里必须有恰好叫 `bash` 和 `read` 的函数定义，名字大小写都敏感
+- User-Agent 要含 `opencode/<版本>`，我用的是 `opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14`
+- `x-opencode-session` 和 `x-opencode-session-id` 两个头都要发，值还得一样
+- 会话 ID 要匹配 `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`，而且那 12 位 hex 要匹配 `^[0-9a-f]{9}f[c-f][0-9a-f]$`
+- 不能发 `x-opencode-request`，那是老版头，发了直接 403
 
-会话格式那条最讲究：后三位 hex 必须落在 `0xFC0..0xFFF`（递减时间戳布局）。UUID、递增计数器、
-纯随机 hex 全都会被拒。
+最后那条会话 ID 最坑。后三位 hex 必须落在 `0xFC0..0xFFF` 区间，是个递减时间戳的布局。
+我一开始用 UUID，403；换成递增的随机 hex，还是 403；最后照着开源实现的规则生成才对。
+生成规则写成一行大概是这样：
 
-**Pi 的常规对话形状是对的**（Pi 的内置工具本来就叫 `bash` 和 `read`），但**摘要 / 压缩
-（compaction）发的请求只有 messages、没有 tools** —— 正好是服务端拒绝的形状。所以长会话里会
-出现 `Summarization failed: 403 FreeTierError`。
+```js
+"ses_" + 9位随机hex + "f" + [c-f]中随机一位 + 随机hex + 14位base62
+```
 
-这就是插件要做的事：**给任何缺少形状的请求补上形状**，其余原样交给 Pi 内置的
-`openai-completions` 实现。
+## 为什么还得写个扩展
 
----
+Pi 正常聊天的时候形状是对的。Pi 内置工具本来就叫 `bash` 和 `read`，UA 和会话头也能在
+models.json 里配上，所以一开始对话是通的。
 
-## 前置条件
+问题出在摘要和压缩。Pi 做 compaction 的时候走的是另一条构造路径，发出去的请求只有 messages、
+不带 tools。这一下就撞上门槛了，长会话里会看到 `Summarization failed: 403 FreeTierError`。
 
-- Pi（CLI 或 Percho 桌面端都行，实测 Pi 1.3.0）
-- **一个出口在服务地区的代理** —— 大陆用户这一步不可跳过
-- CC Switch（可选。它只是帮你管理 provider；Pi 直接读 `models.json` 也能用）
+所以扩展干的事很简单：任何缺 tools 的请求，给它补上 `bash` 和 `read` 两个占位定义，再强制
+打开 stream，其余原样交给 Pi 内置的 `openai-completions` 实现。已经带 tools 的请求不动它。
 
-## 三步搞定
+## 配置
 
 ### 1. 装扩展
 
@@ -66,16 +63,18 @@ OpenCode 的免费端点不在常规 API 上，而是 `https://opencode.ai/zen/v
 pi install git:github.com/ZhiAo1120/pi-opencode-zen
 ```
 
-装不了就手动拷贝：
+装不上就手动拷：
 
 ```bash
 git clone https://github.com/ZhiAo1120/pi-opencode-zen /tmp/pi-opencode-zen
 cp /tmp/pi-opencode-zen/extensions/opencode-zen.ts ~/.pi/agent/extensions/
 ```
 
-> 扩展在**启动时**加载。用 Percho 的话要**重启整个 App**（Percho 是进程内承载 Pi 的）。
+扩展是启动时加载的。如果你用 Percho 桌面端，得重启整个 App，因为 Percho 是把 Pi 跑在自己进程里。
 
-### 2. 配 `~/.pi/agent/models.json`
+### 2. 改 models.json
+
+文件在 `~/.pi/agent/models.json`，加一个 provider 进去：
 
 ```json
 {
@@ -95,98 +94,94 @@ cp /tmp/pi-opencode-zen/extensions/opencode-zen.ts ~/.pi/agent/extensions/
 }
 ```
 
-两条必须遵守的规则：
+有个坑要注意：`"api": "opencode-zen-api"` 只能写在 provider 这一层。如果你给单个 model 也写一个
+`api`，就把扩展绕过去了，403 立马回来。这个我踩过。
 
-- `"api": "opencode-zen-api"` 只能写在 **provider 级**。给单个 model 写 `api` 会绕过扩展，403 立刻回来。
-- 不需要写任何 headers，插件自己会发。**永远别发** `x-opencode-request`。
+headers 不用写，扩展自己会发。
 
-### 3. 配 CC Switch（可选）
+### 3. CC Switch（可选）
 
-CC Switch 会在切换供应商时把它自己那份 provider 写进 `models.json`，所以同一份配置存了两处，
-**结构还不一样**：
+CC Switch 会在你切换供应商的时候，把它自己存的那份 provider 写进 models.json。也就是说同一份
+配置存了两份，而且两边结构不一样，这个很容易写错：
 
-| | |
-|---|---|
-| 数据库 | `~/.cc-switch/cc-switch.db`（SQLite） |
-| 行 | `providers` 表，`id = 'opencode-zen'`，`app_type = 'pi'`，主键 `(id, app_type)` |
-| `settings_config` | **只放 provider 对象本身**（`name`/`baseUrl`/`api`/`apiKey`/`models`），**不是**整个 `models.json` |
-| 其他列 | `name`、`category = 'custom'`、`icon = 'pi'`、`meta = '{}'`、`is_current = 0`、`in_failover_queue = 0`、`cost_multiplier = '1.0'` |
+- 数据库是 `~/.cc-switch/cc-switch.db`，SQLite
+- 表是 `providers`，行靠 `id = 'opencode-zen'` 和 `app_type = 'pi'` 定位，主键是这两个字段的组合
+- `settings_config` 字段里放的是 provider 对象本身，也就是 `name`/`baseUrl`/`api`/`apiKey`/`models` 这几个键，不是整个 models.json
+- 其他字段跟着填：`name`、`category = 'custom'`、`icon = 'pi'`、`meta = '{}'`、`is_current = 0`、`in_failover_queue = 0`、`cost_multiplier = '1.0'`
 
-⚠️ **改数据库前先退出 CC Switch** —— 它把 provider 列表放在内存里，退出时会重写数据库，
-运行中改的内容会被默默覆盖。
+写数据库之前一定要先退出 CC Switch。它把 provider 列表放在内存里，退出的时候会重写数据库，
+你运行中改的内容会被它覆盖掉，白改。
 
-写入脚本和一致性核对脚本都放在仓库 README 的 **CC Switch** 章节，可直接粘贴（我在数据库副本上
-验证过幂等：重复执行不会产生重复行）。
+写入脚本和一致性检查脚本我放在仓库 README 的 CC Switch 那一节了，可以直接复制。
+那个脚本我在数据库副本上跑过，重复执行不会多出行。
 
-### 懒人方案：丢给智能体
+其实 CC Switch 是可选的。Pi 直接读 models.json，只配 provider 也能用，只有你在 App 里切换
+供应商时才需要那一行。
 
-仓库里有一份 [`AGENT-SETUP.md`](https://github.com/ZhiAo1120/pi-opencode-zen/blob/main/AGENT-SETUP.md)，
-是**写给智能体看的配置说明**。整份粘贴给你的编码智能体（Percho / Pi / 其他 CLI agent 都行），
-它会自己完成：查地区 → 装扩展 → 备份并合并 `models.json` → 退出 CC Switch 后写数据库 → 跑验证
-命令 → 报告结果。里面也写清了硬约束（先备份、只动 `opencode-zen`、不写真实 key、不替用户开代理）。
+### 不想自己动手的话
 
----
+仓库里有个 `AGENT-SETUP.md`，是写给智能体看的配置说明。整份复制给你的编码智能体
+（Percho、Pi、其他 CLI agent 都行），它会自己去查地区、装扩展、备份并合并 models.json、
+退出 CC Switch 后写数据库、跑验证命令，最后把结果贴给你。里面也写了硬约束，比如必须先备份、
+只动 opencode-zen 这个 provider、不许写真实 key。
 
-## 实测可用的模型
+## 现在能用的模型
 
-2026-10-16 从美国出口 IP 实测，列表随时会变：
+2026-10-16 从美国出口测的，随时会变：
 
 | 状态 | 模型 |
 |---|---|
-| ✅ 可用 | `cat-jam-free`（262K/131K）、`longcat-2.5-preview-free`（1M/131K）、`nemotron-3.5-lightning-free`（262K/262K） |
-| ⏳ 429（限量提供） | `deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`space-bunny-free`、`mimo-v2.6-flash-free`、`big-pickle`、`ll-alpha-free`、`nemotron-3.5-super-vl-free` |
-| ❌ 协议不符 | `muse-spark-1.2/1.3-contributor-free`（responses 协议）、`jev-1.13-free`（systemone 协议） |
+| 能用 | `cat-jam-free`（262K/131K）、`longcat-2.5-preview-free`（1M/131K）、`nemotron-3.5-lightning-free`（262K/262K） |
+| 429，限量提供 | `deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`space-bunny-free`、`mimo-v2.6-flash-free`、`big-pickle`、`ll-alpha-free`、`nemotron-3.5-super-vl-free` |
+| 协议不对 | `muse-spark-1.2/1.3-contributor-free`（responses 协议）、`jev-1.13-free`（systemone 协议） |
 
-那批 429 做过对照实验：换全新会话 ID 仍 429、同 IP 下其他模型稳定 200、出口 IP 在美国 ——
-都不是原因，就是服务侧限量放号。
+那批 429 我做过对照：换个全新的合规会话 ID 还是 429，同一个 IP 下其他模型稳定 200，
+出口 IP 也确实在美国。都不是原因，就是服务侧放号有限。
 
----
+## 我踩过的坑
 
-## 踩坑清单
+- 报 `403 RegionError`：出口地区不在服务范围。这里有个反直觉的地方，地区校验是先于形状校验跑的，
+  所以这个报错根本说明不了你的配置有没有问题，先查代理再说。
+- 报 `403 FreeTierError`：形状不对。要么扩展没加载，要么 `api` 被写到 model 层了，要么发了
+  `x-opencode-request`。
+- 报 `429 FreeUsageLimitError`：形状没问题，是那个模型限量提供、容量用尽了，换个模型或者过会儿再来。
+- 排查的时候千万别加 `-ne`。`-ne` 等于 `--no-extensions`，扩展根本不加载，你配置再对也是失败，
+  然后就会像我一样怀疑人生。测 Zen 相关的东西绝对不能带这个参数。
+- 长会话里报 `Summarization failed: 403`：还是扩展没生效，同上去查。
+- 改了文件没反应：扩展是启动时加载的，重启 Pi 或者 Percho。
 
-| 现象 | 原因 |
-|---|---|
-| `403 RegionError` | 出口地区不受服务。**地区校验先于形状校验**，所以这个错完全不能说明配置有问题，先查代理 |
-| `403 FreeTierError` | 形状不对：扩展没加载、`api` 被写到 model 级、或发了 `x-opencode-request` |
-| `429 FreeUsageLimitError` | 形状没问题，该模型限量提供，容量用尽 → 换模型或稍后再试 |
-| 排查时用了 `-ne` | `-ne` = `--no-extensions`，扩展直接不加载，正常配置看起来就像坏的。**测 Zen 功能绝不能加 `-ne`** |
-| 长会话报 `Summarization failed: 403` | 扩展没生效（同上） |
-| 改了文件没反应 | 扩展启动时加载，重启 Pi / Percho |
-
-验证命令（**不要加 `-ne`**）：
+验证的话跑这三条（还是那句话，别加 `-ne`）：
 
 ```bash
 pi --list-models opencode-zen
 
 pi -p --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply with exactly: ZEN-OK"
 
-# 关键：无工具请求（压缩就是这个形状），能回 NOTOOLS-OK 才说明扩展生效
+# 这条是关键，走的是无工具请求那条路（也就是压缩时的形状），能回 NOTOOLS-OK 才说明扩展真的生效了
 pi -p --no-tools --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply with exactly: NOTOOLS-OK"
 ```
 
+## 关于风险
+
+先说清楚，这不叫破解。免费层本来就不需要真 key，认证头写 `public` 就行，我没绕过任何认证。
+但它的性质是伪装成官方客户端去用人家声明只给自家客户端用的额度，官方文档里也写了会监控滥用流量，
+所以确实是在打条款擦边球。
+
+实际后果就是限流，这个已经在发生了，再严重点可能封 IP。所以我自己的用法是拿它跑些零碎的
+小任务，别挂自动化、别跑批量。真要稳定用，10 美元一个月的 OpenCode Go 才是正路，
+Pi 在那边是官方认可的客户端。
+
 ---
 
-## 关于风险，我把话说明白
+## 短版（发群或者即刻用）
 
-这不是「破解」也不是「越权访问」—— 免费层本来就不需要真 key，我没有绕过任何认证。但它确实是
-**按形状伪装成官方客户端**去用人家声明只给自家客户端用的额度，属于打条款擦边球，官方也明说会
-监控滥用流量。实际后果：限流（已经在发生了）、极端情况封 IP。
-
-所以：**别拿它跑批量任务、别做自动化高频调用**。要稳定，$10/月的 OpenCode Go 订阅才是正路
-（Pi 在那里是官方认可的客户端）。
-
----
-
-## 短版（发群 / 即刻 / V2EX 用）
-
-> **Pi + CC Switch 用上 OpenCode 免费模型**
+> 写了个 Pi 扩展，直连 OpenCode 免费层，不用中间代理进程也不用真 key。
 >
-> 写了个 Pi 扩展，直连 OpenCode Zen 免费层，不需要中间代理进程、不需要真 key。
-> 免费层是按「请求形状」放行的（要求 tools 里必须有 `bash`/`read`、特定 UA 和会话头格式），
-> 而 Pi 的压缩请求不带 tools，必然 403 —— 扩展负责把形状补齐。
+> 免费层是按请求形状放行的，要求 tools 里必须有 `bash` 和 `read`、UA 得带 opencode 版本号、
+> 会话 ID 还得符合特定的时间戳布局。Pi 正常聊天没问题，但压缩请求不带 tools，一压缩就 403，
+> 扩展负责把形状补回去。
 >
-> 三个前提：① 大陆 IP 用不了，**必须挂代理**且出口在服务地区；② 免费模型是**限量提供**的，
-> 多数会 429，目前稳定可用 3 个；③ 属于条款擦边球，风险自负。
+> 三个前提：大陆 IP 用不了必须挂代理；免费模型限量提供，大部分时候 429，稳定能用 3 个；
+> 属于条款擦边球，风险自负。
 >
-> 仓库（MIT，含中英 README 和一份可直接丢给智能体的配置说明）：
-> <https://github.com/ZhiAo1120/pi-opencode-zen>
+> 仓库：<https://github.com/ZhiAo1120/pi-opencode-zen>
