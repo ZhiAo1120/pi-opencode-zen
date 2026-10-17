@@ -90,7 +90,13 @@ Add the provider to `~/.pi/agent/models.json`:
       "models": [
         { "id": "cat-jam-free", "name": "cat-jam-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 131072 },
         { "id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": true, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072 },
-        { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 }
+        { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 },
+        { "id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": true, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072 },
+        { "id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "space-bunny-free", "name": "space-bunny-free", "reasoning": true, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288 },
+        { "id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "big-pickle", "name": "big-pickle", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 }
       ]
     }
   }
@@ -137,6 +143,12 @@ provider = {
         {"id": "cat-jam-free", "name": "cat-jam-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 131072},
         {"id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": True, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072},
         {"id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144},
+        {"id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": True, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072},
+        {"id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "space-bunny-free", "name": "space-bunny-free", "reasoning": True, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288},
+        {"id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "big-pickle", "name": "big-pickle", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
     ],
 }
 
@@ -194,19 +206,21 @@ extension never loads, and a healthy setup looks broken. (Explicit `-e <path>` s
 
 ## Model availability
 
-Measured 2026-10-16 from a US exit IP. This list changes without notice — treat it as a starting
+Measured from a US exit IP on 2026-10-17 (the `429` column is from the 2026-10-16 run). This list
+changes without notice — treat it as a starting
 point, not a promise.
 
 | Status | Models |
 |---|---|
-| Works | `cat-jam-free` (262K/131K), `longcat-2.5-preview-free` (1M/131K), `nemotron-3.5-lightning-free` (262K/262K) |
-| `429 FreeUsageLimitError` | `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `space-bunny-free`, `mimo-v2.6-flash-free`, `big-pickle`, `ll-alpha-free`, `nemotron-3.5-super-vl-free` — **served in limited quantity** |
+| Works | `cat-jam-free` (262K/131K), `longcat-2.5-preview-free` (1M/131K), `nemotron-3.5-lightning-free` (262K/262K), `nemotron-3.5-super-vl-free` (1M/131K, vision), `deepseek-v4.1-flash-free` (200K/32K), `glm-5.3-flash-free` (200K/32K), `space-bunny-free` (1M/524K), `mimo-v2.6-flash-free` (200K/32K), `big-pickle` (200K/32K) |
+| Retired | `ll-alpha-free` — answers `410 ModelDeprecated`, remove it from `models.json` |
 | Wrong protocol, unusable here | `muse-spark-1.2/1.3-contributor-free` (responses API), `jev-1.13-free` (systemone API) |
 
-The 429 group is a supply limit, not your usage: those models are only served in limited quantity
-on the free tier, so they are often unavailable no matter who asks. Ruled out by experiment:
-session reuse (a fresh session id changed nothing), IP blocking (other models answered 200 from the
-same IP), and region (the exit was in the US).
+Availability swings between runs, not within one: on 2026-10-16 these six all answered `429` —
+`deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `space-bunny-free`, `mimo-v2.6-flash-free`,
+`big-pickle`, `nemotron-3.5-super-vl-free` — and on 2026-10-17 all nine answered normally while
+`ll-alpha-free` was gone. The tier serves these in limited quantity, so a `429` is a capacity
+message, not a configuration problem. Retry, or switch model.
 
 ## How it works
 
@@ -243,7 +257,8 @@ through with only `stream` forced on.
 |---|---|
 | `403 FreeTierError` | Request shape is wrong: tools missing, wrong User-Agent, malformed session id, or `x-opencode-request` was sent. |
 | `403 RegionError` — *"This model is not available in your country"* | Your exit IP's region is not served. The region check runs **before** the shape check, so this error says nothing about the request shape. Every model fails the same way. Use an exit in a served region. |
-| `429 FreeUsageLimitError` | Shape is fine; that model is out of free capacity — it is served in limited quantity. Try another model from the table above, or come back later. |
+| `429 FreeUsageLimitError` | Shape is fine; that model is out of free capacity right now — the tier serves it in limited quantity. Retry, or use another model from the table above. |
+| `410 ModelDeprecated` | That model was retired from the free tier. Remove it from `models.json`. |
 | Still broken after an edit | The extension loads at startup. Restart Pi / Percho. |
 | `Summarization failed: 403` in long sessions | The extension is not loaded. Check for a stale `-ne` in your aliases. |
 | A tool-less run tries to call `bash`/`read` | Those are the injected placeholders, not real tools. Run with tools enabled. |

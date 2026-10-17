@@ -68,7 +68,13 @@ cp /tmp/pi-opencode-zen/extensions/opencode-zen.ts ~/.pi/agent/extensions/
       "models": [
         { "id": "cat-jam-free", "name": "cat-jam-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 131072 },
         { "id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": true, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072 },
-        { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 }
+        { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 },
+        { "id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": true, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072 },
+        { "id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "space-bunny-free", "name": "space-bunny-free", "reasoning": true, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288 },
+        { "id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        { "id": "big-pickle", "name": "big-pickle", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 }
       ]
     }
   }
@@ -114,6 +120,12 @@ provider = {
         {"id": "cat-jam-free", "name": "cat-jam-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 131072},
         {"id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": True, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072},
         {"id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144},
+        {"id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": True, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072},
+        {"id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "space-bunny-free", "name": "space-bunny-free", "reasoning": True, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288},
+        {"id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {"id": "big-pickle", "name": "big-pickle", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
     ],
 }
 
@@ -161,7 +173,7 @@ pi -p --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply w
 pi -p --no-tools --no-mcp --offline --no-session --model opencode-zen/cat-jam-free "Reply with exactly: NOTOOLS-OK"
 ```
 
-期望：第一条列出 3 个模型；后两条分别回显 `ZEN-OK`、`NOTOOLS-OK`（第二条是关键 —— 它走的正是
+期望：第一条列出 9 个模型；后两条分别回显 `ZEN-OK`、`NOTOOLS-OK`（第二条是关键 —— 它走的正是
 需要扩展补形状的「无工具」路径）。
 
 ### 6. 重启提醒
@@ -174,7 +186,8 @@ pi -p --no-tools --no-mcp --offline --no-session --model opencode-zen/cat-jam-fr
 |---|---|---|
 | `403 RegionError` | 出口地区不受服务 | 开代理 / 换出口。**不要**改配置 |
 | `403 FreeTierError` | 形状不对 | 扩展没加载（检查有没有 `-ne`、有没有重启）；或 `api` 被写到了 model 级；或发了 `x-opencode-request` |
-| `429 FreeUsageLimitError` | 形状没问题；该模型在免费层是**限量提供**，容量用尽 | 换 `cat-jam-free` / `longcat-2.5-preview-free` / `nemotron-3.5-lightning-free` 里的另一个，或稍后再试 |
+| `429 FreeUsageLimitError` | 形状没问题；该模型在免费层限量提供，此刻没有容量（很常见，同一批模型几分钟后就又能用） | 重试，或换另一个 —— 实测能用的有 `cat-jam-free`、`longcat-2.5-preview-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`space-bunny-free`、`mimo-v2.6-flash-free`、`big-pickle` |
+| `410 ModelDeprecated` | 该模型已下架 | 从 `models.json` 里删掉它（例如 `ll-alpha-free`） |
 | 长会话里 `Summarization failed: 403` | 扩展没生效 | 同上，重点查扩展是否加载 |
 
 ## 硬约束

@@ -8,7 +8,7 @@
 先把几个前提说了，免得白折腾：
 
 - 大陆 IP 用不了，得挂代理，出口要在服务地区（我用的是美国出口）。
-- 免费模型是限量提供的，大部分时候会返回 429，目前稳定能用的就 3 个。
+- 免费模型是限量提供的，会随机 429。我实测这一轮 9 个都能用，但同一批模型十几分钟前还全在 429。
 - 这事属于打条款擦边球（官方说免费层只给 OpenCode 客户端用），风险自负。
 
 ---
@@ -127,16 +127,19 @@ CC Switch 会在你切换供应商的时候，把它自己存的那份 provider 
 
 ## 现在能用的模型
 
-2026-10-16 从美国出口测的，随时会变：
+2026-10-17 从美国出口测的，随时会变：
 
 | 状态 | 模型 |
 |---|---|
-| 能用 | `cat-jam-free`（262K/131K）、`longcat-2.5-preview-free`（1M/131K）、`nemotron-3.5-lightning-free`（262K/262K） |
-| 429，限量提供 | `deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`space-bunny-free`、`mimo-v2.6-flash-free`、`big-pickle`、`ll-alpha-free`、`nemotron-3.5-super-vl-free` |
+| 能用 | `cat-jam-free`（262K/131K）、`longcat-2.5-preview-free`（1M/131K）、`nemotron-3.5-lightning-free`（262K/262K）、`nemotron-3.5-super-vl-free`（1M/131K，支持图像）、`deepseek-v4.1-flash-free`（200K/32K）、`glm-5.3-flash-free`（200K/32K）、`space-bunny-free`（1M/524K）、`mimo-v2.6-flash-free`（200K/32K）、`big-pickle`（200K/32K） |
+| 已下架 | `ll-alpha-free`，返回 `410 ModelDeprecated` |
 | 协议不对 | `muse-spark-1.2/1.3-contributor-free`（responses 协议）、`jev-1.13-free`（systemone 协议） |
 
-那批 429 我做过对照：换个全新的合规会话 ID 还是 429，同一个 IP 下其他模型稳定 200，
-出口 IP 也确实在美国。都不是原因，就是服务侧放号有限。
+这张表是隔了一天两轮的对比。前一天（10-16）`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、
+`space-bunny-free`、`mimo-v2.6-flash-free`、`big-pickle`、`nemotron-3.5-super-vl-free` 全是 429，
+当时我还做了对照：换个全新的合规会话 ID 还是 429，同一个 IP 下其他模型稳定 200，出口也确实
+在美国，所以不是我的配置问题。第二天再测这些又全好了，`ll-alpha-free` 反而下架了。就是服务侧
+限量放号，看到 429 别去改配置，重试或者换个模型就行。
 
 ## 我踩过的坑
 
@@ -144,7 +147,8 @@ CC Switch 会在你切换供应商的时候，把它自己存的那份 provider 
   所以这个报错根本说明不了你的配置有没有问题，先查代理再说。
 - 报 `403 FreeTierError`：形状不对。要么扩展没加载，要么 `api` 被写到 model 层了，要么发了
   `x-opencode-request`。
-- 报 `429 FreeUsageLimitError`：形状没问题，是那个模型限量提供、容量用尽了，换个模型或者过会儿再来。
+- 报 `429 FreeUsageLimitError`：形状没问题，是那个模型此刻限量提供、没有容量了。重试或者换个模型，别去改配置。
+- 报 `410 ModelDeprecated`：模型被下架了，从 models.json 里删掉就行。
 - 排查的时候千万别加 `-ne`。`-ne` 等于 `--no-extensions`，扩展根本不加载，你配置再对也是失败，
   然后就会像我一样怀疑人生。测 Zen 相关的东西绝对不能带这个参数。
 - 长会话里报 `Summarization failed: 403`：还是扩展没生效，同上去查。
@@ -187,7 +191,6 @@ Pi 在那边是官方认可的客户端。
 > 会话 ID 还得符合特定的时间戳布局。Pi 正常聊天没问题，但压缩请求不带 tools，一压缩就 403，
 > 扩展负责把形状补回去。
 >
-> 三个前提：大陆 IP 用不了必须挂代理；免费模型限量提供，大部分时候 429，稳定能用 3 个；
-> 属于条款擦边球，风险自负。
+> 三个前提：大陆 IP 用不了必须挂代理；免费模型限量提供，会随机 429；属于条款擦边球，风险自负。
 >
 > 仓库：<https://github.com/ZhiAo1120/pi-opencode-zen>
