@@ -92,8 +92,24 @@ Add the provider to `~/.pi/agent/models.json`:
         { "id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": true, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072 },
         { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 },
         { "id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": true, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072 },
-        { "id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
-        { "id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        {
+          "id": "deepseek-v4.1-flash-free",
+          "name": "deepseek-v4.1-flash-free",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 200000,
+          "maxTokens": 32000,
+          "thinkingLevelMap": { "off": null, "minimal": null, "low": "low", "medium": null, "high": "high", "xhigh": null, "max": "max" }
+        },
+        {
+          "id": "glm-5.3-flash-free",
+          "name": "glm-5.3-flash-free",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 200000,
+          "maxTokens": 32000,
+          "thinkingLevelMap": { "off": null, "minimal": null, "low": "low", "medium": null, "high": "high", "xhigh": null, "max": "max" }
+        },
         { "id": "space-bunny-free", "name": "space-bunny-free", "reasoning": true, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288 },
         { "id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
         { "id": "big-pickle", "name": "big-pickle", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 }
@@ -103,12 +119,15 @@ Add the provider to `~/.pi/agent/models.json`:
 }
 ```
 
-Two rules that matter:
+Three rules that matter:
 
 - `"api": "opencode-zen-api"` must stay at **provider** level. Do not set `api` on individual
   models — that bypasses this extension and brings the 403 back.
 - No headers needed. The extension sends `User-Agent` and the session headers itself. Never send
   `x-opencode-request` (a legacy header that causes an immediate 403).
+- `thinkingLevelMap` is what unlocks `max` in `/thinking`. Without it Pi stops at `high`, because it
+  treats `xhigh` and `max` as unsupported unless the model maps them. `deepseek-v4.1-flash-free` and
+  `glm-5.3-flash-free` accept `low`, `high` and `max`, and the map above keeps exactly those three.
 
 ## CC Switch
 
@@ -144,8 +163,24 @@ provider = {
         {"id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": True, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072},
         {"id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144},
         {"id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": True, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072},
-        {"id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
-        {"id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {
+            "id": "deepseek-v4.1-flash-free",
+            "name": "deepseek-v4.1-flash-free",
+            "reasoning": True,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 32000,
+            "thinkingLevelMap": {"off": None, "minimal": None, "low": "low", "medium": None, "high": "high", "xhigh": None, "max": "max"},
+        },
+        {
+            "id": "glm-5.3-flash-free",
+            "name": "glm-5.3-flash-free",
+            "reasoning": True,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 32000,
+            "thinkingLevelMap": {"off": None, "minimal": None, "low": "low", "medium": None, "high": "high", "xhigh": None, "max": "max"},
+        },
         {"id": "space-bunny-free", "name": "space-bunny-free", "reasoning": True, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288},
         {"id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
         {"id": "big-pickle", "name": "big-pickle", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},

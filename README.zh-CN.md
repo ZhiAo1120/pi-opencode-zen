@@ -83,8 +83,24 @@ pi -e ./extensions/opencode-zen.ts -p --model opencode-zen/cat-jam-free "hello"
         { "id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": true, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072 },
         { "id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": true, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144 },
         { "id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": true, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072 },
-        { "id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
-        { "id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
+        {
+          "id": "deepseek-v4.1-flash-free",
+          "name": "deepseek-v4.1-flash-free",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 200000,
+          "maxTokens": 32000,
+          "thinkingLevelMap": { "off": null, "minimal": null, "low": "low", "medium": null, "high": "high", "xhigh": null, "max": "max" }
+        },
+        {
+          "id": "glm-5.3-flash-free",
+          "name": "glm-5.3-flash-free",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 200000,
+          "maxTokens": 32000,
+          "thinkingLevelMap": { "off": null, "minimal": null, "low": "low", "medium": null, "high": "high", "xhigh": null, "max": "max" }
+        },
         { "id": "space-bunny-free", "name": "space-bunny-free", "reasoning": true, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288 },
         { "id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 },
         { "id": "big-pickle", "name": "big-pickle", "reasoning": true, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000 }
@@ -94,12 +110,15 @@ pi -e ./extensions/opencode-zen.ts -p --model opencode-zen/cat-jam-free "hello"
 }
 ```
 
-两条必须遵守的规则：
+三条必须遵守的规则：
 
 - `"api": "opencode-zen-api"` 必须放在 **provider** 级。不要在单个 model 上写 `api`，
   那会绕过本扩展，403 立刻回来。
 - 不需要写任何 headers。`User-Agent` 和会话头由扩展自己发送。**永远不要**发
   `x-opencode-request`（legacy 头，发了直接 403）。
+- `thinkingLevelMap` 决定 `/thinking` 能不能选到 `max`。没有它，Pi 只给到 `high`：`xhigh` 和
+  `max` 默认视为不支持。`deepseek-v4.1-flash-free` 和 `glm-5.3-flash-free` 实测接受 `low`、
+  `high`、`max`，上面的写法只保留这三档。
 
 ## CC Switch
 
@@ -134,8 +153,24 @@ provider = {
         {"id": "longcat-2.5-preview-free", "name": "longcat-2.5-preview-free", "reasoning": True, "input": ["text"], "contextWindow": 1000000, "maxTokens": 131072},
         {"id": "nemotron-3.5-lightning-free", "name": "nemotron-3.5-lightning-free", "reasoning": True, "input": ["text"], "contextWindow": 262144, "maxTokens": 262144},
         {"id": "nemotron-3.5-super-vl-free", "name": "nemotron-3.5-super-vl-free", "reasoning": True, "input": ["text", "image"], "contextWindow": 1048576, "maxTokens": 131072},
-        {"id": "deepseek-v4.1-flash-free", "name": "deepseek-v4.1-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
-        {"id": "glm-5.3-flash-free", "name": "glm-5.3-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
+        {
+            "id": "deepseek-v4.1-flash-free",
+            "name": "deepseek-v4.1-flash-free",
+            "reasoning": True,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 32000,
+            "thinkingLevelMap": {"off": None, "minimal": None, "low": "low", "medium": None, "high": "high", "xhigh": None, "max": "max"},
+        },
+        {
+            "id": "glm-5.3-flash-free",
+            "name": "glm-5.3-flash-free",
+            "reasoning": True,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 32000,
+            "thinkingLevelMap": {"off": None, "minimal": None, "low": "low", "medium": None, "high": "high", "xhigh": None, "max": "max"},
+        },
         {"id": "space-bunny-free", "name": "space-bunny-free", "reasoning": True, "input": ["text"], "contextWindow": 1048576, "maxTokens": 524288},
         {"id": "mimo-v2.6-flash-free", "name": "mimo-v2.6-flash-free", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
         {"id": "big-pickle", "name": "big-pickle", "reasoning": True, "input": ["text"], "contextWindow": 200000, "maxTokens": 32000},
